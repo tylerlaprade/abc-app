@@ -132,6 +132,67 @@
       opacity: 0;
     }
   }
+
+  #display-area {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #touch-grid {
+    display: none;
+  }
+
+  @media (pointer: coarse) {
+    body {
+      flex-direction: column;
+    }
+
+    #display-area {
+      flex: 0 0 55%;
+    }
+
+    #letter {
+      font-size: 35vw;
+    }
+
+    #touch-grid {
+      display: grid;
+      grid-template-columns: repeat(9, 1fr);
+      gap: 4px;
+      padding: 8px;
+      width: 100%;
+      align-content: start;
+    }
+
+    .grid-btn {
+      aspect-ratio: 1;
+      border: none;
+      border-radius: 8px;
+      background: #f0f0f0;
+      font-size: 5vw;
+      font-weight: bold;
+      font-family: system-ui, -apple-system, sans-serif;
+      color: #333;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .grid-btn:active {
+      background: #ddd;
+      transform: scale(0.95);
+    }
+
+    #thumbs-down {
+      bottom: auto;
+      top: 35%;
+      font-size: 10vw;
+    }
+
+    .celebration-emoji {
+      font-size: 8vw;
+    }
+  }
 </style>
 </head>
 <body>
@@ -140,8 +201,11 @@
   <button class="mode-btn active" data-mode="freeplay">Free Play</button>
   <button class="mode-btn" data-mode="quiz">Quiz</button>
 </div>
-<div id="hint">Press any letter or number!</div>
-<div id="letter"></div>
+<div id="display-area">
+  <div id="hint">Press any letter or number!</div>
+  <div id="letter"></div>
+</div>
+<div id="touch-grid"></div>
 <div id="thumbs-down">👎</div>
 <div id="confetti-container"></div>
 
@@ -163,6 +227,8 @@ const hint = document.getElementById('hint');
 const letter = document.getElementById('letter');
 const modeBtns = document.querySelectorAll('.mode-btn');
 const thumbsDown = document.getElementById('thumbs-down');
+const touchGrid = document.getElementById('touch-grid');
+const isTouch = window.matchMedia('(pointer: coarse)').matches;
 
 let lastColor = '';
 let mode = 'freeplay';
@@ -346,7 +412,7 @@ function setMode(newMode) {
     // Reset to freeplay initial state
     letter.style.display = 'none';
     hint.style.display = 'block';
-    hint.textContent = 'Press any letter or number!';
+    hint.textContent = isTouch ? 'Tap any letter or number!' : 'Press any letter or number!';
     currentTarget = '';
   }
 }
@@ -358,37 +424,47 @@ modeBtns.forEach(btn => {
   });
 });
 
-// --- Keydown handler ---
-document.addEventListener('keydown', function(e) {
-  // Only handle plain letter/number keys — let browser shortcuts (Cmd+W, etc.) through
-  if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
-
-  const key = e.key.toUpperCase();
-  if (!/^[A-Z0-9]$/.test(key)) return;
-
-  e.preventDefault();
-
+// --- Input handling ---
+function handleChar(key) {
   if (mode === 'freeplay') {
     showChar(key, pickColor());
     speakChar(key);
     scheduleFade();
   } else {
-    // Quiz mode
     if (quizLocked) return;
-
     if (key === currentTarget) {
-      // Correct!
       quizLocked = true;
       spawnConfetti();
       showCelebrationEmojis();
       playChime();
       setTimeout(startQuizRound, 2000);
     } else {
-      // Incorrect
       showThumbsDown();
       playBuzzer();
     }
   }
+}
+
+// --- Touch grid ---
+CHARS.split('').forEach(ch => {
+  const btn = document.createElement('button');
+  btn.className = 'grid-btn';
+  btn.textContent = ch;
+  btn.addEventListener('click', () => handleChar(ch));
+  touchGrid.appendChild(btn);
+});
+
+if (isTouch) {
+  hint.textContent = 'Tap any letter or number!';
+}
+
+// --- Keydown handler ---
+document.addEventListener('keydown', function(e) {
+  if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
+  const key = e.key.toUpperCase();
+  if (!/^[A-Z0-9]$/.test(key)) return;
+  e.preventDefault();
+  handleChar(key);
 });
 </script>
 </body>
