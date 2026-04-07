@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ABC App</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #fff;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: system-ui, -apple-system, sans-serif;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  #hint {
+    font-size: 4vw;
+    color: #aaa;
+    transition: opacity 0.5s;
+  }
+
+  #letter {
+    font-size: 50vw;
+    font-weight: bold;
+    line-height: 1;
+    display: none;
+  }
+
+  #letter.pop {
+    animation: pop 0.2s ease-out;
+  }
+
+  #letter.fade-out {
+    animation: fade-out 0.5s ease-out forwards;
+  }
+
+  @keyframes pop {
+    from { transform: scale(0.5); }
+    to   { transform: scale(1.0); }
+  }
+
+  @keyframes fade-out {
+    from { opacity: 1; }
+    to   { opacity: 0; }
+  }
+
+  /* Mode buttons */
+  #mode-buttons {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    z-index: 100;
+    display: flex;
+    gap: 6px;
+  }
+  .mode-btn {
+    background: #eee;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-size: 14px;
+    font-family: system-ui, -apple-system, sans-serif;
+    color: #666;
+    cursor: pointer;
+  }
+  .mode-btn:hover { background: #ddd; }
+  .mode-btn.active {
+    background: #1e88e5;
+    border-color: #1565c0;
+    color: #fff;
+  }
+  .mode-btn.active:hover { background: #1976d2; }
+
+  /* Thumbs down overlay */
+  #thumbs-down {
+    position: fixed;
+    bottom: 10vh;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 15vw;
+    display: none;
+    z-index: 50;
+    animation: shake 0.4s ease-out;
+  }
+
+  @keyframes shake {
+    0%, 100% { transform: translateX(-50%) rotate(0deg); }
+    20% { transform: translateX(-50%) rotate(-10deg); }
+    40% { transform: translateX(-50%) rotate(10deg); }
+    60% { transform: translateX(-50%) rotate(-5deg); }
+    80% { transform: translateX(-50%) rotate(5deg); }
+  }
+
+  /* Celebration emojis */
+  .celebration-emoji {
+    position: fixed;
+    z-index: 55;
+    font-size: 12vw;
+    pointer-events: none;
+    animation: emoji-pop 1.5s ease-out forwards;
+  }
+
+  @keyframes emoji-pop {
+    0%   { transform: scale(0) rotate(-20deg); opacity: 1; }
+    30%  { transform: scale(1.2) rotate(5deg); opacity: 1; }
+    50%  { transform: scale(1) rotate(0deg); opacity: 1; }
+    100% { transform: scale(1.3) rotate(10deg); opacity: 0; }
+  }
+
+  /* Confetti particle */
+  .confetti {
+    position: fixed;
+    pointer-events: none;
+    z-index: 60;
+    animation: confetti-burst var(--duration) ease-out forwards;
+  }
+
+  @keyframes confetti-burst {
+    0% {
+      transform: translate(0, 0) rotate(0deg);
+      opacity: 1;
+    }
+    100% {
+      transform: translate(var(--tx), var(--ty)) rotate(var(--rot));
+      opacity: 0;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div id="mode-buttons">
+  <button class="mode-btn active" data-mode="freeplay">Free Play</button>
+  <button class="mode-btn" data-mode="quiz">Quiz</button>
+</div>
+<div id="hint">Press any letter or number!</div>
+<div id="letter"></div>
+<div id="thumbs-down">👎</div>
+<div id="confetti-container"></div>
+
+<script>
+const COLORS = [
+  '#e53935', '#ff6d00', '#ffab00', '#43a047',
+  '#1e88e5', '#8e24aa', '#d81b60', '#00897b',
+  '#3949ab', '#f4511e'
+];
+
+const NUMBER_WORDS = {
+  '0': 'zero', '1': 'one', '2': 'two', '3': 'three', '4': 'four',
+  '5': 'five', '6': 'six', '7': 'seven', '8': 'eight', '9': 'nine'
+};
+
+const CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+
+const hint = document.getElementById('hint');
+const letter = document.getElementById('letter');
+const modeBtn = document.getElementById('mode-btn');
+const thumbsDown = document.getElementById('thumbs-down');
+
+let lastColor = '';
+let mode = 'freeplay';
+let currentTarget = '';
+let quizLocked = false; // prevents input during correct-answer celebration
+let fadeTimer = null;
+
+// --- Audio ---
+let audioCtx = null;
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+function playChime() {
+  const ctx = getAudioCtx();
+  const notes = [523.25, 659.25, 783.99]; // C5, E5, G5
+  notes.forEach((freq, i) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    gain.gain.value = 0.15;
+    gain.gain.setTargetAtTime(0, ctx.currentTime + i * 0.1 + 0.08, 0.02);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(ctx.currentTime + i * 0.1);
+    osc.stop(ctx.currentTime + i * 0.1 + 0.2);
+  });
+}
+
+function playBuzzer() {
+  const ctx = getAudioCtx();
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = 'sawtooth';
+  osc.frequency.value = 200;
+  gain.gain.value = 0.08;
+  gain.gain.setTargetAtTime(0, ctx.currentTime + 0.25, 0.03);
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start();
+  osc.stop(ctx.currentTime + 0.35);
+}
+
+// --- Confetti ---
+const confettiContainer = document.getElementById('confetti-container');
+
+function spawnConfetti() {
+  const count = 60;
+  const shapes = ['square', 'circle'];
+  for (let i = 0; i < count; i++) {
+    const el = document.createElement('div');
+    el.className = 'confetti';
+
+    // Random size
+    const size = 8 + Math.random() * 14;
+    el.style.width = size + 'px';
+    el.style.height = size + 'px';
+    if (shapes[Math.floor(Math.random() * 2)] === 'circle') {
+      el.style.borderRadius = '50%';
+    }
+
+    el.style.background = COLORS[Math.floor(Math.random() * COLORS.length)];
+
+    // Start from center of screen
+    el.style.left = '50vw';
+    el.style.top = '50vh';
+
+    // Random direction and distance via CSS custom properties
+    const angle = Math.random() * 2 * Math.PI;
+    const dist = 40 + Math.random() * 55;
+    const tx = Math.cos(angle) * dist;
+    const ty = Math.sin(angle) * dist;
+    const rot = Math.random() * 720 - 360;
+    const duration = 1.0 + Math.random() * 0.8;
+
+    el.style.setProperty('--tx', tx + 'vw');
+    el.style.setProperty('--ty', ty + 'vh');
+    el.style.setProperty('--rot', rot + 'deg');
+    el.style.setProperty('--duration', duration + 's');
+
+    document.body.appendChild(el);
+
+    // Cleanup after animation
+    setTimeout(() => el.remove(), duration * 1000 + 50);
+  }
+}
+
+// --- Celebration emojis ---
+function showCelebrationEmojis() {
+  const emojis = ['👍', '🎉'];
+  const positions = [
+    { left: '15vw', top: '25vh' },
+    { right: '15vw', top: '25vh' },
+  ];
+  emojis.forEach((emoji, i) => {
+    const el = document.createElement('div');
+    el.className = 'celebration-emoji';
+    el.textContent = emoji;
+    Object.assign(el.style, positions[i]);
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 1600);
+  });
+}
+
+// --- Display helpers ---
+function pickColor() {
+  let color;
+  do {
+    color = COLORS[Math.floor(Math.random() * COLORS.length)];
+  } while (color === lastColor);
+  lastColor = color;
+  return color;
+}
+
+function showChar(ch, color) {
+  clearTimeout(fadeTimer);
+  hint.style.display = 'none';
+  letter.style.display = 'block';
+  letter.style.opacity = '1';
+  letter.textContent = ch;
+  letter.style.color = color;
+  letter.classList.remove('pop', 'fade-out');
+  void letter.offsetWidth;
+  letter.classList.add('pop');
+}
+
+function scheduleFade() {
+  clearTimeout(fadeTimer);
+  fadeTimer = setTimeout(() => {
+    letter.classList.add('fade-out');
+  }, 1500);
+}
+
+function speakChar(ch) {
+  speechSynthesis.cancel();
+  const text = NUMBER_WORDS[ch] || ch.toLowerCase();
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = 0.9;
+  speechSynthesis.speak(u);
+}
+
+// --- Quiz logic ---
+function pickQuizTarget() {
+  let ch;
+  do {
+    ch = CHARS[Math.floor(Math.random() * CHARS.length)];
+  } while (ch === currentTarget);
+  currentTarget = ch;
+}
+
+function startQuizRound() {
+  quizLocked = false;
+  thumbsDown.style.display = 'none';
+  pickQuizTarget();
+  showChar(currentTarget, pickColor());
+  speakChar(currentTarget);
+}
+
+function showThumbsDown() {
+  thumbsDown.style.display = 'block';
+  // Re-trigger shake animation
+  thumbsDown.style.animation = 'none';
+  void thumbsDown.offsetWidth;
+  thumbsDown.style.animation = 'shake 0.4s ease-out';
+  setTimeout(() => { thumbsDown.style.display = 'none'; }, 800);
+}
+
+// --- Mode toggle ---
+function setMode(newMode) {
+  mode = newMode;
+  modeBtn.textContent = mode === 'freeplay' ? 'Free Play' : 'Quiz';
+  thumbsDown.style.display = 'none';
+  quizLocked = false;
+
+  if (mode === 'quiz') {
+    startQuizRound();
+  } else {
+    // Reset to freeplay initial state
+    letter.style.display = 'none';
+    hint.style.display = 'block';
+    hint.textContent = 'Press any letter or number!';
+    currentTarget = '';
+  }
+}
+
+modeBtn.addEventListener('click', function() {
+  setMode(mode === 'freeplay' ? 'quiz' : 'freeplay');
+  modeBtn.blur();
+});
+
+// --- Keydown handler ---
+document.addEventListener('keydown', function(e) {
+  // Only handle plain letter/number keys — let browser shortcuts (Cmd+W, etc.) through
+  if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
+
+  const key = e.key.toUpperCase();
+  if (!/^[A-Z0-9]$/.test(key)) return;
+
+  e.preventDefault();
+
+  if (mode === 'freeplay') {
+    showChar(key, pickColor());
+    speakChar(key);
+    scheduleFade();
+  } else {
+    // Quiz mode
+    if (quizLocked) return;
+
+    if (key === currentTarget) {
+      // Correct!
+      quizLocked = true;
+      spawnConfetti();
+      showCelebrationEmojis();
+      playChime();
+      setTimeout(startQuizRound, 2000);
+    } else {
+      // Incorrect
+      showThumbsDown();
+      playBuzzer();
+    }
+  }
+});
+</script>
+</body>
+</html>
