@@ -762,6 +762,8 @@ const COLORS = [
 
 const SESSION_KEY = 'ariaAnimalsSession';
 const STATS_KEY = 'ariaAnimalsStats';
+const PORTAL_TIMER_KEY = 'ariaPortalPlayTimer';
+const PLAY_LIMIT_UI_KEY = 'ariaPortalPlayLimitUi';
 
 function defaultStats() {
   return {
@@ -836,29 +838,66 @@ function loadStatsFromStorage() {
   }
 }
 
-function clearPlaySessionStorage() {
+function readPortalPlayDeadline() {
+  try {
+    const raw = sessionStorage.getItem(PORTAL_TIMER_KEY);
+    if (!raw) return null;
+    const o = JSON.parse(raw);
+    const e = o.endsAt != null ? Number(o.endsAt) : null;
+    if (e == null || isNaN(e) || Date.now() >= e) return null;
+    return e;
+  } catch (_) {
+    return null;
+  }
+}
+
+function clearPlaySessionStorage(alsoClearPortalTimer) {
   try {
     sessionStorage.removeItem(SESSION_KEY);
     sessionStorage.removeItem(STATS_KEY);
+    if (alsoClearPortalTimer) {
+      sessionStorage.removeItem(PORTAL_TIMER_KEY);
+      sessionStorage.removeItem(PLAY_LIMIT_UI_KEY);
+    }
   } catch (_) {}
 }
 
 function initPlaySession() {
   try {
+    const portalDeadline = readPortalPlayDeadline();
     const raw = sessionStorage.getItem(SESSION_KEY);
-    if (!raw) {
+    let endsAt = null;
+    let startedAt = Date.now();
+
+    if (portalDeadline != null) {
+      endsAt = portalDeadline;
+      if (raw) {
+        try {
+          const s = JSON.parse(raw);
+          if (s.startedAt != null && !isNaN(Number(s.startedAt))) startedAt = Number(s.startedAt);
+        } catch (_) {}
+      }
+      try {
+        sessionStorage.setItem(SESSION_KEY, JSON.stringify({ endsAt: endsAt, startedAt: startedAt }));
+      } catch (_) {}
+    } else if (raw) {
+      const s = JSON.parse(raw);
+      endsAt = s.endsAt != null ? Number(s.endsAt) : null;
+      if (s.startedAt != null && !isNaN(Number(s.startedAt))) startedAt = Number(s.startedAt);
+    } else {
       playLimitEndsAt = null;
       stats = defaultStats();
       sessionStorage.removeItem(STATS_KEY);
       return;
     }
-    const s = JSON.parse(raw);
-    playLimitEndsAt = s.endsAt != null ? Number(s.endsAt) : null;
-    if (playLimitEndsAt != null && (isNaN(playLimitEndsAt) || Date.now() >= playLimitEndsAt)) {
+
+    if (endsAt != null && (isNaN(endsAt) || Date.now() >= endsAt)) {
+      playLimitEndsAt = endsAt;
       loadStatsFromStorage();
       onSessionTimeUp();
       return;
     }
+    playLimitEndsAt = endsAt;
     loadStatsFromStorage();
   } catch (_) {
     playLimitEndsAt = null;
@@ -881,6 +920,10 @@ function animalEmojiForKey(key) {
 function onSessionTimeUp() {
   if (sessionEnded) return;
   sessionEnded = true;
+  try {
+    sessionStorage.removeItem(PORTAL_TIMER_KEY);
+    sessionStorage.removeItem(PLAY_LIMIT_UI_KEY);
+  } catch (_) {}
   if (sessionTickId != null) {
     clearInterval(sessionTickId);
     sessionTickId = null;
@@ -1711,11 +1754,11 @@ setMode('freeplay');
 
 document.getElementById('link-home').addEventListener('click', function() {
   stopAnimalsGame();
-  clearPlaySessionStorage();
+  clearPlaySessionStorage(false);
 });
 
 document.getElementById('session-end-home').addEventListener('click', function() {
-  clearPlaySessionStorage();
+  clearPlaySessionStorage(true);
 });
 
 window.addEventListener('pagehide', function() {

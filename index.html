@@ -480,6 +480,8 @@
   var ANIMALS_STATS_KEY = 'ariaAnimalsStats';
   var SHAPES_SESSION_KEY = 'ariaShapesSession';
   var SHAPES_STATS_KEY = 'ariaShapesStats';
+  var PORTAL_TIMER_KEY = 'ariaPortalPlayTimer';
+  var PLAY_LIMIT_UI_KEY = 'ariaPortalPlayLimitUi';
 
   function defaultAlphabetStats() {
     return {
@@ -528,7 +530,61 @@
     customWrap.hidden = playLimit.value !== 'custom';
   }
 
-  playLimit.addEventListener('change', syncCustomVisibility);
+  function readActivePortalPayload() {
+    try {
+      var raw = sessionStorage.getItem(PORTAL_TIMER_KEY);
+      if (!raw) return null;
+      var o = JSON.parse(raw);
+      var e = o.endsAt != null ? Number(o.endsAt) : null;
+      if (e == null || isNaN(e) || Date.now() >= e) return null;
+      return o;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function persistPlayLimitUi() {
+    try {
+      sessionStorage.setItem(PLAY_LIMIT_UI_KEY, JSON.stringify({
+        selectValue: playLimit.value,
+        customMinutes: customMinutes.value
+      }));
+    } catch (err) {}
+  }
+
+  /** Home page reload resets the <select> to default; sync from active portal or last choice so resolveMinutes() matches the running timer. */
+  function restorePlayLimitUiFromStorage() {
+    try {
+      var portal = readActivePortalPayload();
+      if (portal && portal.limitMinutes != null) {
+        var lm = Number(portal.limitMinutes);
+        if (lm === 5 || lm === 10 || lm === 15) {
+          playLimit.value = String(lm);
+        } else {
+          playLimit.value = 'custom';
+          customMinutes.value = String(lm);
+        }
+        syncCustomVisibility();
+        persistPlayLimitUi();
+        return;
+      }
+      var raw = sessionStorage.getItem(PLAY_LIMIT_UI_KEY);
+      if (!raw) return;
+      var u = JSON.parse(raw);
+      if (u.selectValue) playLimit.value = u.selectValue;
+      if (u.customMinutes != null) customMinutes.value = u.customMinutes;
+      syncCustomVisibility();
+    } catch (err) {}
+  }
+
+  restorePlayLimitUiFromStorage();
+
+  playLimit.addEventListener('change', function() {
+    syncCustomVisibility();
+    persistPlayLimitUi();
+  });
+  customMinutes.addEventListener('input', persistPlayLimitUi);
+  customMinutes.addEventListener('change', persistPlayLimitUi);
   syncCustomVisibility();
 
   function resolveMinutes() {
@@ -544,14 +600,51 @@
     return !isNaN(preset) && preset > 0 ? preset : null;
   }
 
+  /** One shared deadline across alphabet, animals, and shapes while the same limit is selected. */
+  function resolveEndsAtForPortalNavigation(mins) {
+    if (mins == null) {
+      try {
+        sessionStorage.removeItem(PORTAL_TIMER_KEY);
+      } catch (err) {}
+      try {
+        sessionStorage.removeItem(PLAY_LIMIT_UI_KEY);
+      } catch (err2) {}
+      return { endsAt: null, startedAt: Date.now() };
+    }
+    try {
+      var raw = sessionStorage.getItem(PORTAL_TIMER_KEY);
+      if (raw) {
+        var o = JSON.parse(raw);
+        var prevMins = o.limitMinutes != null ? Number(o.limitMinutes) : NaN;
+        var e = o.endsAt != null ? Number(o.endsAt) : null;
+        if (prevMins === mins && e != null && !isNaN(e) && Date.now() < e) {
+          return {
+            endsAt: e,
+            startedAt: o.startedAt != null ? Number(o.startedAt) : Date.now()
+          };
+        }
+      }
+    } catch (err) {}
+    var end = Date.now() + mins * 60 * 1000;
+    try {
+      sessionStorage.setItem(PORTAL_TIMER_KEY, JSON.stringify({
+        endsAt: end,
+        startedAt: Date.now(),
+        limitMinutes: mins
+      }));
+    } catch (err2) {}
+    return { endsAt: end, startedAt: Date.now() };
+  }
+
   document.getElementById('tile-alphabets').addEventListener('click', function(e) {
     e.preventDefault();
+    persistPlayLimitUi();
     var mins = resolveMinutes();
-    var endsAt = mins != null ? Date.now() + mins * 60 * 1000 : null;
+    var t = resolveEndsAtForPortalNavigation(mins);
     try {
       sessionStorage.setItem(ALPHABET_SESSION_KEY, JSON.stringify({
-        endsAt: endsAt,
-        startedAt: Date.now()
+        endsAt: t.endsAt,
+        startedAt: t.startedAt
       }));
       sessionStorage.setItem(ALPHABET_STATS_KEY, JSON.stringify(defaultAlphabetStats()));
     } catch (err) {}
@@ -560,12 +653,13 @@
 
   document.getElementById('tile-animals').addEventListener('click', function(e) {
     e.preventDefault();
+    persistPlayLimitUi();
     var mins = resolveMinutes();
-    var endsAt = mins != null ? Date.now() + mins * 60 * 1000 : null;
+    var t = resolveEndsAtForPortalNavigation(mins);
     try {
       sessionStorage.setItem(ANIMALS_SESSION_KEY, JSON.stringify({
-        endsAt: endsAt,
-        startedAt: Date.now()
+        endsAt: t.endsAt,
+        startedAt: t.startedAt
       }));
       sessionStorage.setItem(ANIMALS_STATS_KEY, JSON.stringify(defaultAnimalsStats()));
     } catch (err) {}
@@ -574,12 +668,13 @@
 
   document.getElementById('tile-shapes').addEventListener('click', function(e) {
     e.preventDefault();
+    persistPlayLimitUi();
     var mins = resolveMinutes();
-    var endsAt = mins != null ? Date.now() + mins * 60 * 1000 : null;
+    var t = resolveEndsAtForPortalNavigation(mins);
     try {
       sessionStorage.setItem(SHAPES_SESSION_KEY, JSON.stringify({
-        endsAt: endsAt,
-        startedAt: Date.now()
+        endsAt: t.endsAt,
+        startedAt: t.startedAt
       }));
       sessionStorage.setItem(SHAPES_STATS_KEY, JSON.stringify(defaultShapesStats()));
     } catch (err) {}
