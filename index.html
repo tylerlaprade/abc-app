@@ -24,11 +24,12 @@
     background: linear-gradient(165deg, #7c4dff 0%, #ff6ec7 45%, #ffd54f 100%);
   }
 
-  /* align-items: center shrink-wraps flex children; grid needs a full-width main so % widths and auto-fit see the real viewport. */
+  /* Full width up to 1080px, centered in the viewport (stretch + max-width left the block visually start-aligned on wide screens). */
   main {
-    align-self: stretch;
     width: 100%;
     max-width: min(1080px, 100%);
+    margin-inline: auto;
+    align-self: center;
   }
 
   .portal-header {
@@ -79,6 +80,15 @@
   /* Third tile sits on its own row when the grid is 2 columns wide (not three in one line). */
   .game-grid .game-tile:nth-child(3) {
     grid-column: 1 / -1;
+  }
+
+  /* Narrow grid (usually one column): cap card width so tiles are not full-bleed; wider grid fills each column. */
+  @container portal-game-grid (max-width: 31.5rem) {
+    .game-grid .game-tile {
+      width: min(100%, 22.5rem);
+      max-width: 22.5rem;
+      justify-self: center;
+    }
   }
 
   @container portal-game-grid (min-width: 31.5rem) {
