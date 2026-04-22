@@ -77,8 +77,8 @@
     padding-bottom: 6px;
   }
 
-  /* Third tile sits on its own row when the grid is 2 columns wide (not three in one line). */
-  .game-grid .game-tile:nth-child(3) {
+  /* With exactly three tiles, the third spans the row (2+1). Four or more tiles stay a balanced grid (e.g. 2×2). */
+  .game-grid .game-tile:nth-child(3):last-child {
     grid-column: 1 / -1;
   }
 
@@ -92,10 +92,16 @@
   }
 
   @media (min-width: 31.5rem) {
-    .game-grid .game-tile:nth-child(3) {
+    .game-grid .game-tile:nth-child(3):last-child {
       justify-self: center;
       width: min(100%, calc((100% - var(--game-grid-gap)) / 2));
     }
+  }
+
+  .game-grid .game-tile:nth-child(5):last-child {
+    grid-column: 1 / -1;
+    justify-self: center;
+    width: min(100%, calc((100% - var(--game-grid-gap)) / 2));
   }
 
   .game-tile {
@@ -325,6 +331,101 @@
       0 8px 16px rgba(0, 0, 0, 0.18);
   }
 
+  .game-tile--colors {
+    background: linear-gradient(145deg, #fff8e1 0%, #ffecb3 38%, #ffcc80 100%);
+    box-shadow:
+      0 8px 0 #e65100,
+      0 14px 28px rgba(0, 0, 0, 0.2);
+  }
+
+  .game-tile__art--colors-dots {
+    flex-wrap: wrap;
+    align-content: center;
+    column-gap: clamp(0.5rem, 5vw, 0.85rem);
+    row-gap: clamp(0.4rem, 3vw, 0.55rem);
+  }
+
+  .game-tile__art--colors-dots .game-tile__art__dot {
+    display: inline-flex;
+    flex-shrink: 0;
+    width: clamp(1.85rem, 10vw, 2.35rem);
+    height: clamp(1.85rem, 10vw, 2.35rem);
+    border-radius: 50%;
+    border: 3px solid rgba(255, 255, 255, 0.95);
+    box-shadow:
+      inset 0 2px 6px rgba(0, 0, 0, 0.12),
+      0 3px 0 rgba(0, 0, 0, 0.1);
+  }
+
+  .game-tile__art__dot--red { background: #e53935; }
+  .game-tile__art__dot--blue { background: #1e88e5; }
+  .game-tile__art__dot--yellow { background: #ffeb3b; }
+  .game-tile__art__dot--green { background: #43a047; }
+
+  .game-tile--colors .game-tile__art {
+    filter: drop-shadow(0 4px 0 rgba(230, 81, 0, 0.35));
+  }
+
+  .game-tile--colors .game-tile__label {
+    color: #bf360c;
+  }
+
+  .game-tile--colors .game-tile__hint {
+    color: #e65100;
+    opacity: 0.95;
+  }
+
+  .game-tile--colors:hover {
+    box-shadow:
+      0 12px 0 #e65100,
+      0 18px 32px rgba(0, 0, 0, 0.22);
+  }
+
+  .game-tile--colors:active {
+    box-shadow:
+      0 4px 0 #e65100,
+      0 8px 16px rgba(0, 0, 0, 0.18);
+  }
+
+  .game-tile--same {
+    background: linear-gradient(145deg, #e0f7fa 0%, #b2ebf2 40%, #4dd0e1 100%);
+    box-shadow:
+      0 8px 0 #00838f,
+      0 14px 28px rgba(0, 0, 0, 0.2);
+  }
+
+  .game-tile__art--same-pair {
+    flex-wrap: wrap;
+    align-content: center;
+    gap: clamp(0.35rem, 3vw, 0.55rem);
+    font-size: clamp(1.75rem, 9vw, 2.75rem);
+  }
+
+  .game-tile__art--same-pair .game-tile__art__same-icon {
+    filter: drop-shadow(0 3px 0 rgba(0, 131, 143, 0.35));
+  }
+
+  .game-tile--same .game-tile__label {
+    color: #004d40;
+  }
+
+  .game-tile--same .game-tile__hint {
+    color: #006064;
+    opacity: 0.95;
+  }
+
+  .game-tile--same:hover {
+    box-shadow:
+      0 12px 0 #00838f,
+      0 18px 32px rgba(0, 0, 0, 0.22);
+  }
+
+  .game-tile--same:active {
+    box-shadow:
+      0 4px 0 #00838f,
+      0 8px 16px rgba(0, 0, 0, 0.18);
+  }
+
   .parent-panel {
     width: 100%;
     max-width: min(1080px, 100%);
@@ -456,6 +557,25 @@
       <span class="game-tile__label">Learn Shapes and Colors</span>
       <span class="game-tile__hint">Circles, squares, and more!</span>
     </a>
+    <a class="game-tile game-tile--colors" href="colors.html" id="tile-colors">
+      <span class="game-tile__art game-tile__art--colors-dots" aria-hidden="true">
+        <span class="game-tile__art__dot game-tile__art__dot--red"></span>
+        <span class="game-tile__art__dot game-tile__art__dot--blue"></span>
+        <span class="game-tile__art__dot game-tile__art__dot--yellow"></span>
+        <span class="game-tile__art__dot game-tile__art__dot--green"></span>
+      </span>
+      <span class="game-tile__label">Learn Colors</span>
+      <span class="game-tile__hint">Big dots — names only!</span>
+    </a>
+    <a class="game-tile game-tile--same" href="same-as.html" id="tile-same-as">
+      <span class="game-tile__art game-tile__art--same-pair" aria-hidden="true">
+        <span class="game-tile__art__same-icon">🐸</span>
+        <span class="game-tile__art__same-icon">🟰</span>
+        <span class="game-tile__art__same-icon">🐸</span>
+      </span>
+      <span class="game-tile__label">Same As</span>
+      <span class="game-tile__hint">Pick the one that matches!</span>
+    </a>
   </div>
 </main>
 <script>
@@ -466,6 +586,10 @@
   var ANIMALS_STATS_KEY = 'ariaAnimalsStats';
   var SHAPES_SESSION_KEY = 'ariaShapesSession';
   var SHAPES_STATS_KEY = 'ariaShapesStats';
+  var COLORS_SESSION_KEY = 'ariaColorsSession';
+  var COLORS_STATS_KEY = 'ariaColorsStats';
+  var SAME_AS_SESSION_KEY = 'ariaSameAsSession';
+  var SAME_AS_STATS_KEY = 'ariaSameAsStats';
   var PORTAL_TIMER_KEY = 'ariaPortalPlayTimer';
   var PLAY_LIMIT_UI_KEY = 'ariaPortalPlayLimitUi';
 
@@ -505,6 +629,29 @@
       visitedFreeplay: false,
       visitedQuiz: false,
       visitedChase: false
+    };
+  }
+
+  function defaultColorsStats() {
+    return {
+      freeColors: 0,
+      quizCorrect: 0,
+      chaseCorrect: 0,
+      quizStruggled: [],
+      chaseStruggled: [],
+      visitedFreeplay: false,
+      visitedQuiz: false,
+      visitedChase: false
+    };
+  }
+
+  function defaultSameAsStats() {
+    return {
+      matchCorrect: 0,
+      matchWrong: 0,
+      struggled: [],
+      usedAnimals: false,
+      usedShapes: false
     };
   }
 
@@ -586,7 +733,7 @@
     return !isNaN(preset) && preset > 0 ? preset : null;
   }
 
-  /** One shared deadline across alphabet, animals, and shapes while the same limit is selected. */
+  /** One shared deadline across games while the same limit is selected. */
   function resolveEndsAtForPortalNavigation(mins) {
     if (mins == null) {
       try {
@@ -665,6 +812,36 @@
       sessionStorage.setItem(SHAPES_STATS_KEY, JSON.stringify(defaultShapesStats()));
     } catch (err) {}
     window.location.href = 'shapes.html';
+  });
+
+  document.getElementById('tile-colors').addEventListener('click', function(e) {
+    e.preventDefault();
+    persistPlayLimitUi();
+    var mins = resolveMinutes();
+    var t = resolveEndsAtForPortalNavigation(mins);
+    try {
+      sessionStorage.setItem(COLORS_SESSION_KEY, JSON.stringify({
+        endsAt: t.endsAt,
+        startedAt: t.startedAt
+      }));
+      sessionStorage.setItem(COLORS_STATS_KEY, JSON.stringify(defaultColorsStats()));
+    } catch (err) {}
+    window.location.href = 'colors.html';
+  });
+
+  document.getElementById('tile-same-as').addEventListener('click', function(e) {
+    e.preventDefault();
+    persistPlayLimitUi();
+    var mins = resolveMinutes();
+    var t = resolveEndsAtForPortalNavigation(mins);
+    try {
+      sessionStorage.setItem(SAME_AS_SESSION_KEY, JSON.stringify({
+        endsAt: t.endsAt,
+        startedAt: t.startedAt
+      }));
+      sessionStorage.setItem(SAME_AS_STATS_KEY, JSON.stringify(defaultSameAsStats()));
+    } catch (err) {}
+    window.location.href = 'same-as.html';
   });
 })();
 </script>
