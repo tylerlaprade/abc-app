@@ -39,19 +39,6 @@ function syncCustomVisibility() {
   customWrap.hidden = playLimit.value !== 'custom';
 }
 
-function readActivePortalPayload() {
-  try {
-    const raw = sessionStorage.getItem(PORTAL_TIMER_KEY);
-    if (!raw) return null;
-    const payload = JSON.parse(raw);
-    const endsAt = payload.endsAt != null ? Number(payload.endsAt) : null;
-    if (endsAt == null || Number.isNaN(endsAt) || Date.now() >= endsAt) return null;
-    return payload;
-  } catch (_) {
-    return null;
-  }
-}
-
 function persistPlayLimitUi() {
   try {
     sessionStorage.setItem(PLAY_LIMIT_UI_KEY, JSON.stringify({
@@ -63,7 +50,7 @@ function persistPlayLimitUi() {
 
 function restorePlayLimitUiFromStorage() {
   try {
-    const portal = readActivePortalPayload();
+    const portal = readPortalPlayPayload();
     if (portal && portal.limitMinutes != null) {
       const minutes = Number(portal.limitMinutes);
       if (minutes === 5 || minutes === 10 || minutes === 15) {
@@ -160,4 +147,3 @@ customMinutes.addEventListener('change', persistPlayLimitUi);
 
 renderTiles();
 restorePlayLimitUiFromStorage();
-syncCustomVisibility();

@@ -14,23 +14,38 @@ function createCollectionActivity(options) {
     getChaseParams,
     gridQuizClass,
     thumbsDown,
-    hitMargin,
     confetti,
-    dom
+    dom,
+    onFreeplayInteract,
+    onQuizStart,
+    onModeEnter
   } = options;
 
   const { audio, showCelebrationEmojis, spawnConfetti } = feedback;
-  const { modeBtns, viewFreeplay, appMain, grid, modeHint, quizTop, quizReplayBtn, chaseArena } = dom;
+  const { modeBtns, grid, modeHint, chaseArena, viewFreeplay, appMain, quizTop, quizReplayBtn } = dom;
+
+  const chaseHitMargin = 30;
+  const chaseRepromptMs = 5000;
+  const chaseDifficultyMax = 15;
 
   let mode = 'freeplay';
-  let quizTarget = null;
+  let quizTargetIndex = -1;
   let quizLocked = false;
   let chaseDifficulty = 0;
   let chaseItems = [];
   let chaseAnimId = null;
-  let chaseTarget = null;
+  let chaseTargetIndex = -1;
   let chasePaused = false;
+  let chaseRepeatId = null;
   let lastFrameTime = 0;
+
+  function quizTarget() {
+    return quizTargetIndex >= 0 ? items[quizTargetIndex] : null;
+  }
+
+  function chaseTarget() {
+    return chaseTargetIndex >= 0 ? items[chaseTargetIndex] : null;
+  }
 
   function setMode(newMode) {
     if (session.isSessionEnded()) return;
@@ -45,13 +60,19 @@ function createCollectionActivity(options) {
     quizLocked = false;
 
     const inChase = mode === 'chase';
+    document.body.classList.toggle('chase-active', inChase);
     grid.style.display = inChase ? 'none' : '';
     chaseArena.style.display = inChase ? 'block' : 'none';
-    if (modeHint) modeHint.style.display = inChase ? 'none' : 'block';
+    chaseArena.setAttribute('aria-hidden', inChase ? 'false' : 'true');
+    if (appMain) appMain.hidden = inChase;
+    if (modeHint) modeHint.hidden = mode !== 'freeplay';
 
     if (gridQuizClass) {
       grid.classList.toggle(gridQuizClass, mode === 'quiz');
     }
+    if (viewFreeplay) viewFreeplay.classList.toggle('view-freeplay--quiz', mode === 'quiz');
+    if (appMain) appMain.classList.toggle('app-main--quiz', mode === 'quiz');
+    if (quizTop) quizTop.hidden = mode !== 'quiz';
 
     if (mode === 'quiz') {
       startQuizRound();
@@ -69,9 +90,11 @@ function createCollectionActivity(options) {
         else stats.visitedChase = true;
       });
     }
+
+    if (onModeEnter) onModeEnter(mode);
   }
 
-  function handleItemClick(item) {
+  function handleItemClick(item, index) {
     if (session.isSessionEnded() || mode === 'chase') return;
 
     if (mode === 'freeplay') {
@@ -79,14 +102,13 @@ function createCollectionActivity(options) {
         stats[freeplayStatField]++;
         stats.visitedFreeplay = true;
       });
-      if (promptItem) {
-        promptItem(items.indexOf(item));
-      }
+      if (promptItem) promptItem(index);
+      if (onFreeplayInteract) onFreeplayInteract(item, index);
       return;
     }
 
     if (quizLocked) return;
-    if (getTargetKey(item) === getTargetKey(quizTarget)) {
+    if (getTargetKey(item) === getTargetKey(quizTarget())) {
       session.mutateStats(function(stats) {
         stats.quizCorrect++;
       });
@@ -97,10 +119,7 @@ function createCollectionActivity(options) {
       setTimeout(startQuizRound, 2000);
     } else {
       session.mutateStats(function(stats) {
-        const struggledField = 'quizStruggled';
-        if (!stats[struggledField].includes(getTargetKey(quizTarget))) {
-          stats[struggledField].push(getTargetKey(quizTarget));
-        }
+        pushUniqueStruggle(stats.quizStruggled, getTargetKey(quizTarget()));
       });
       thumbsDown.show();
       audio.playBuzzer();
@@ -111,14 +130,13 @@ function createCollectionActivity(options) {
     if (session.isSessionEnded()) return;
     quizLocked = false;
     thumbsDown.hide();
-    let next;
+    let nextIndex;
     do {
-      next = items[Math.floor(Math.random() * items.length)];
-    } while (quizTarget && getTargetKey(next) === getTargetKey(quizTarget));
-    quizTarget = next;
-    if (promptItem) {
-      promptItem(items.indexOf(quizTarget));
-    }
+      nextIndex = Math.floor(Math.random() * items.length);
+    } while (quizTargetIndex >= 0 && getTargetKey(items[nextIndex]) === getTargetKey(items[quizTargetIndex]));
+    quizTargetIndex = nextIndex;
+    if (promptItem) promptItem(quizTargetIndex);
+    if (onQuizStart) onQuizStart(items[quizTargetIndex], quizTargetIndex);
   }
 
   function startChaseRound() {
@@ -130,14 +148,24 @@ function createCollectionActivity(options) {
     chaseItems = [];
 
     const params = getChaseParams(chaseDifficulty);
-    const shuffled = items.slice().sort(function() { return Math.random() - 0.5; }).slice(0, params.count);
-    chaseTarget = shuffled[Math.floor(Math.random() * shuffled.length)];
+    const indices = items.map(function(_, i) { return i; });
+    const count = Math.min(params.count, indices.length);
+    const shuffled = [];
+    for (let i = 0; i < count; i++) {
+      const j = i + Math.floor(Math.random() * (indices.length - i));
+      const tmp = indices[i];
+      indices[i] = indices[j];
+      indices[j] = tmp;
+      shuffled.push(indices[i]);
+    }
+    chaseTargetIndex = shuffled[Math.floor(Math.random() * shuffled.length)];
 
-    shuffled.forEach(function(item) {
-      const el = createChaseElement(item);
+    shuffled.forEach(function(idx, position) {
+      const item = items[idx];
+      const el = createChaseElement(item, position);
       sizeChaseElement(el, params);
       chaseArena.appendChild(el);
-      chaseItems.push({ el, item, x: 0, y: 0, vx: 0, vy: 0, w: 0, h: 0 });
+      chaseItems.push({ el, item, index: idx, x: 0, y: 0, vx: 0, vy: 0, w: 0, h: 0 });
     });
 
     chaseItems.forEach(function(entry) {
@@ -150,30 +178,59 @@ function createCollectionActivity(options) {
       entry.vy = Math.sin(angle) * params.speed;
     });
 
-    if (promptItem) {
-      promptItem(items.indexOf(chaseTarget));
-    }
+    if (promptItem) promptItem(chaseTargetIndex);
+    chaseRepeatId = setInterval(function() {
+      if (chasePaused || session.isSessionEnded()) return;
+      if (promptItem) promptItem(chaseTargetIndex);
+    }, chaseRepromptMs);
     lastFrameTime = performance.now();
     chaseAnimId = requestAnimationFrame(updateChase);
   }
 
   function updateChase(time) {
-    const dt = (time - lastFrameTime) / 1000;
+    const dt = Math.min((time - lastFrameTime) / 1000, 0.05);
     lastFrameTime = time;
 
     if (!chasePaused) {
+      const width = window.innerWidth;
+      const height = window.innerHeight;
       chaseItems.forEach(function(entry) {
         entry.x += entry.vx * dt;
         entry.y += entry.vy * dt;
 
-        if (entry.x <= 0 || entry.x >= window.innerWidth - entry.w) {
+        if (entry.x <= 0 || entry.x >= width - entry.w) {
           entry.vx *= -1;
-          entry.x = Math.max(0, Math.min(entry.x, window.innerWidth - entry.w));
+          entry.x = Math.max(0, Math.min(entry.x, width - entry.w));
         }
-        if (entry.y <= 0 || entry.y >= window.innerHeight - entry.h) {
+        if (entry.y <= 0 || entry.y >= height - entry.h) {
           entry.vy *= -1;
-          entry.y = Math.max(0, Math.min(entry.y, window.innerHeight - entry.h));
+          entry.y = Math.max(0, Math.min(entry.y, height - entry.h));
         }
+      });
+
+      for (let i = 0; i < chaseItems.length; i++) {
+        for (let j = i + 1; j < chaseItems.length; j++) {
+          const a = chaseItems[i];
+          const b = chaseItems[j];
+          const overlapX = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+          const overlapY = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+          if (overlapX <= 0 || overlapY <= 0) continue;
+
+          if (overlapX < overlapY) {
+            const half = overlapX / 2;
+            if (a.x < b.x) { a.x -= half; b.x += half; }
+            else { a.x += half; b.x -= half; }
+            const tmp = a.vx; a.vx = b.vx; b.vx = tmp;
+          } else {
+            const half = overlapY / 2;
+            if (a.y < b.y) { a.y -= half; b.y += half; }
+            else { a.y += half; b.y -= half; }
+            const tmp = a.vy; a.vy = b.vy; b.vy = tmp;
+          }
+        }
+      }
+
+      chaseItems.forEach(function(entry) {
         entry.el.style.transform = 'translate(' + entry.x + 'px, ' + entry.y + 'px)';
       });
     }
@@ -185,14 +242,24 @@ function createCollectionActivity(options) {
       cancelAnimationFrame(chaseAnimId);
       chaseAnimId = null;
     }
+    if (chaseRepeatId != null) {
+      clearInterval(chaseRepeatId);
+      chaseRepeatId = null;
+    }
   }
 
   function onArenaClick(e) {
     if (chasePaused || session.isSessionEnded()) return;
-    const entry = chaseItems.find(function(en) { return en.el === e.target || en.el.contains(e.target); });
-    if (!entry) return;
+    const x = e.clientX;
+    const y = e.clientY;
+    const hits = chaseItems.filter(function(en) {
+      return x >= en.x - chaseHitMargin && x <= en.x + en.w + chaseHitMargin &&
+        y >= en.y - chaseHitMargin && y <= en.y + en.h + chaseHitMargin;
+    });
+    if (hits.length === 0) return;
 
-    if (getTargetKey(entry.item) === getTargetKey(chaseTarget)) {
+    const targetKey = getTargetKey(chaseTarget());
+    if (hits.some(function(en) { return getTargetKey(en.item) === targetKey; })) {
       session.mutateStats(function(stats) {
         stats.chaseCorrect++;
       });
@@ -200,15 +267,13 @@ function createCollectionActivity(options) {
       spawnConfetti({ colors: confetti.colors });
       showCelebrationEmojis();
       audio.playChime();
-      chaseDifficulty++;
+      chaseDifficulty = Math.min(chaseDifficulty + 1, chaseDifficultyMax);
       setTimeout(startChaseRound, 2000);
     } else {
       session.mutateStats(function(stats) {
-        const struggledField = 'chaseStruggled';
-        if (!stats[struggledField].includes(getTargetKey(chaseTarget))) {
-          stats[struggledField].push(getTargetKey(chaseTarget));
-        }
+        pushUniqueStruggle(stats.chaseStruggled, targetKey);
       });
+      chaseDifficulty = Math.max(chaseDifficulty - 1, 0);
       thumbsDown.show();
       audio.playBuzzer();
     }
@@ -216,9 +281,9 @@ function createCollectionActivity(options) {
 
   function buildGrid() {
     grid.innerHTML = '';
-    items.forEach(function(item) {
-      const btn = renderTile(item);
-      btn.addEventListener('click', function() { handleItemClick(item); });
+    items.forEach(function(item, index) {
+      const btn = renderTile(item, index);
+      btn.addEventListener('click', function() { handleItemClick(item, index); });
       grid.appendChild(btn);
     });
   }
@@ -230,6 +295,13 @@ function createCollectionActivity(options) {
       btn.blur();
     });
   });
+  if (quizReplayBtn) {
+    quizReplayBtn.addEventListener('click', function() {
+      if (session.isSessionEnded() || mode !== 'quiz' || quizTargetIndex < 0) return;
+      if (promptItem) promptItem(quizTargetIndex);
+      quizReplayBtn.blur();
+    });
+  }
 
   buildGrid();
   return {
@@ -240,6 +312,16 @@ function createCollectionActivity(options) {
     reset: function() {
       stopChase();
       setMode('freeplay');
-    }
+    },
+    triggerItemByKey: function(key) {
+      for (let i = 0; i < items.length; i++) {
+        if (getTargetKey(items[i]) === key) {
+          handleItemClick(items[i], i);
+          return true;
+        }
+      }
+      return false;
+    },
+    getMode: function() { return mode; }
   };
 }

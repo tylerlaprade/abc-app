@@ -10,24 +10,21 @@ const thumbsDownEl = document.getElementById('thumbs-down');
 
 let activity = null;
 
+function renderShapePill(pill, key) {
+  pill.textContent = shapeEmojiForKey(key);
+  pill.setAttribute('title', key);
+}
+
 function renderSummary(board, stats) {
-  renderThreeModeSummary(board, stats, {
+  renderThreeModeSummary(board, stats, buildModeSummaryConfig({
     freeplay: {
-      modClass: 'score-section--free',
-      icon: '🎨',
-      title: 'Free play',
       countField: 'freeShapes',
-      notVisitedMessage: 'This mode was not accessed during this play session.',
       emptyMessage: 'You opened Free play - next time, tap shapes to hear colors and names! 🔷',
       countMessage: function(count) {
         return 'You explored shapes ' + count + ' ' + (count === 1 ? 'time' : 'times') + '! 🔷';
       }
     },
     quiz: {
-      modClass: 'score-section--quiz',
-      icon: '🧠',
-      title: 'Quiz',
-      notVisitedMessage: 'This mode was not accessed during this play session.',
       message: function(info) {
         if (info.correct > 0) {
           return 'Nice work - ' + info.correct + ' quiz ' + (info.correct === 1 ? 'round' : 'rounds') + ' solved!';
@@ -35,22 +32,14 @@ function renderSummary(board, stats) {
         if (info.struggled.length > 0) return 'You were practicing - keep going next time!';
         return 'You opened Quiz - match the voice to the shape next time! 🧩';
       },
-      perfectMessage: 'Every answer was first try - you are a star! ⭐',
       struggledLabel: function(info) {
         return info.correct > 0
           ? 'These took an extra try (you got them!):'
           : 'These shapes needed another try:';
       },
-      renderPill: function(pill, key) {
-        pill.textContent = shapeEmojiForKey(key);
-        pill.setAttribute('title', key);
-      }
+      renderPill: renderShapePill
     },
     chase: {
-      modClass: 'score-section--chase',
-      icon: '🏃',
-      title: 'Chase',
-      notVisitedMessage: 'This mode was not accessed during this play session.',
       message: function(info) {
         if (info.correct > 0) {
           return 'You caught the target ' + info.correct + ' ' + (info.correct === 1 ? 'time' : 'times') + '!';
@@ -64,12 +53,9 @@ function renderSummary(board, stats) {
           ? 'These targets needed another tap or two:'
           : 'These targets were tricky to catch:';
       },
-      renderPill: function(pill, key) {
-        pill.textContent = shapeEmojiForKey(key);
-        pill.setAttribute('title', key);
-      }
+      renderPill: renderShapePill
     }
-  });
+  }));
   cancelSpeech();
 }
 
@@ -104,7 +90,7 @@ activity = createCollectionActivity({
   items: SHAPES,
   session,
   feedback: {
-    ...audio,
+    audio,
     showCelebrationEmojis,
     spawnConfetti
   },
@@ -155,8 +141,7 @@ activity = createCollectionActivity({
   },
   gridQuizClass: 'shape-grid--quiz',
   thumbsDown,
-  hitMargin: 30,
-  confetti: { colors: SHAPE_CONFETTI_COLORS },
+  confetti: { colors: RAINBOW_PALETTE },
   dom: {
     modeBtns,
     viewFreeplay,

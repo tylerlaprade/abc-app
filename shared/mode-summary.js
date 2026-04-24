@@ -12,6 +12,37 @@ function createSubheading(text) {
   return sub;
 }
 
+const COMMON_NOT_VISITED = 'This mode was not accessed during this play session.';
+const COMMON_PERFECT_QUIZ = 'Every answer was first try - you are a star! ⭐';
+
+function buildModeSummaryConfig(options) {
+  const { freeplay, quiz, chase } = options;
+  return {
+    freeplay: {
+      modClass: 'score-section--free',
+      icon: '🎨',
+      title: 'Free play',
+      notVisitedMessage: COMMON_NOT_VISITED,
+      ...freeplay
+    },
+    quiz: {
+      modClass: 'score-section--quiz',
+      icon: '🧠',
+      title: 'Quiz',
+      notVisitedMessage: COMMON_NOT_VISITED,
+      perfectMessage: COMMON_PERFECT_QUIZ,
+      ...quiz
+    },
+    chase: {
+      modClass: 'score-section--chase',
+      icon: '🏃',
+      title: 'Chase',
+      notVisitedMessage: COMMON_NOT_VISITED,
+      ...chase
+    }
+  };
+}
+
 function renderThreeModeSummary(board, stats, options) {
   const { freeplay, quiz, chase } = options;
 
@@ -38,14 +69,22 @@ function renderThreeModeSummary(board, stats, options) {
     });
   }
 
-  renderChallengeMode(board, stats, 'quiz', quiz);
-  renderChallengeMode(board, stats, 'chase', chase);
+  renderChallengeMode(board, stats, {
+    visitedField: 'visitedQuiz',
+    correctField: 'quizCorrect',
+    struggledField: 'quizStruggled',
+    ...quiz
+  });
+  renderChallengeMode(board, stats, {
+    visitedField: 'visitedChase',
+    correctField: 'chaseCorrect',
+    struggledField: 'chaseStruggled',
+    ...chase
+  });
 }
 
-function renderChallengeMode(board, stats, key, options) {
-  const visitedField = key === 'quiz' ? 'visitedQuiz' : 'visitedChase';
-  const correctField = key === 'quiz' ? 'quizCorrect' : 'chaseCorrect';
-  const struggledField = key === 'quiz' ? 'quizStruggled' : 'chaseStruggled';
+function renderChallengeMode(board, stats, options) {
+  const { visitedField, correctField, struggledField } = options;
 
   if (!stats[visitedField]) {
     appendMutedSection(board, {

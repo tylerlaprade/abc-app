@@ -1,6 +1,3 @@
-const DEFAULT_PORTAL_TIMER_KEY = 'ariaPortalPlayTimer';
-const DEFAULT_PLAY_LIMIT_UI_KEY = 'ariaPortalPlayLimitUi';
-
 function createTimedSession(options) {
   const {
     sessionKey,
@@ -11,15 +8,14 @@ function createTimedSession(options) {
     renderSummary,
     timerEl = document.getElementById('play-timer'),
     overlayEl = document.getElementById('session-end-overlay'),
-    boardEl = document.getElementById('session-end-stats'),
-    portalTimerKey = DEFAULT_PORTAL_TIMER_KEY,
-    playLimitUiKey = DEFAULT_PLAY_LIMIT_UI_KEY
+    boardEl = document.getElementById('session-end-stats')
   } = options;
 
   let playLimitEndsAt = null;
   let sessionEnded = false;
   let sessionTickId = null;
   let stats = defaultStats();
+  let lastTimerText = '';
 
   function shouldTrackStats() {
     return playLimitEndsAt != null && !sessionEnded;
@@ -47,72 +43,59 @@ function createTimedSession(options) {
     }
   }
 
-  function readPortalPlayDeadline() {
-    try {
-      const raw = sessionStorage.getItem(portalTimerKey);
-      if (!raw) return null;
-      const payload = JSON.parse(raw);
-      const endsAt = payload.endsAt != null ? Number(payload.endsAt) : null;
-      if (endsAt == null || Number.isNaN(endsAt) || Date.now() >= endsAt) return null;
-      return endsAt;
-    } catch (_) {
-      return null;
-    }
-  }
-
   function clearPlaySessionStorage(alsoClearPortalTimer) {
     try {
       sessionStorage.removeItem(sessionKey);
       sessionStorage.removeItem(statsKey);
       if (alsoClearPortalTimer) {
-        sessionStorage.removeItem(portalTimerKey);
-        sessionStorage.removeItem(playLimitUiKey);
+        sessionStorage.removeItem(PORTAL_TIMER_KEY);
+        sessionStorage.removeItem(PLAY_LIMIT_UI_KEY);
       }
     } catch (_) {}
   }
 
+  function readSessionStartedAt(raw, fallback) {
+    if (!raw) return fallback;
+    try {
+      const payload = JSON.parse(raw);
+      const startedAt = Number(payload.startedAt);
+      return Number.isFinite(startedAt) ? startedAt : fallback;
+    } catch (_) {
+      return fallback;
+    }
+  }
+
   function initPlaySession() {
     try {
-      const portalDeadline = readPortalPlayDeadline();
+      const portalPayload = readPortalPlayPayload();
+      const portalDeadline = portalPayload ? Number(portalPayload.endsAt) : null;
       const raw = sessionStorage.getItem(sessionKey);
-      let endsAt = null;
-      let startedAt = Date.now();
 
-      if (portalDeadline != null) {
-        endsAt = portalDeadline;
-        if (raw) {
-          try {
-            const payload = JSON.parse(raw);
-            if (payload.startedAt != null && !Number.isNaN(Number(payload.startedAt))) {
-              startedAt = Number(payload.startedAt);
-            }
-          } catch (_) {}
-        }
-        try {
-          sessionStorage.setItem(sessionKey, JSON.stringify({ endsAt, startedAt }));
-        } catch (_) {}
-      } else if (raw) {
-        const payload = JSON.parse(raw);
-        endsAt = payload.endsAt != null ? Number(payload.endsAt) : null;
-        if (payload.startedAt != null && !Number.isNaN(Number(payload.startedAt))) {
-          startedAt = Number(payload.startedAt);
-        }
-      } else {
+      if (portalDeadline == null && !raw) {
         playLimitEndsAt = null;
         stats = defaultStats();
         sessionStorage.removeItem(statsKey);
         return;
       }
 
-      if (endsAt != null && (Number.isNaN(endsAt) || Date.now() >= endsAt)) {
-        playLimitEndsAt = endsAt;
-        loadStatsFromStorage();
-        onSessionTimeUp();
-        return;
+      let endsAt = portalDeadline;
+      let startedAt = readSessionStartedAt(raw, Date.now());
+
+      if (portalDeadline != null) {
+        try {
+          sessionStorage.setItem(sessionKey, JSON.stringify({ endsAt, startedAt }));
+        } catch (_) {}
+      } else {
+        const payload = JSON.parse(raw);
+        endsAt = payload.endsAt != null ? Number(payload.endsAt) : null;
       }
 
       playLimitEndsAt = endsAt;
       loadStatsFromStorage();
+
+      if (endsAt != null && (Number.isNaN(endsAt) || Date.now() >= endsAt)) {
+        onSessionTimeUp();
+      }
     } catch (_) {
       playLimitEndsAt = null;
       stats = defaultStats();
@@ -131,8 +114,8 @@ function createTimedSession(options) {
     sessionEnded = true;
 
     try {
-      sessionStorage.removeItem(portalTimerKey);
-      sessionStorage.removeItem(playLimitUiKey);
+      sessionStorage.removeItem(PORTAL_TIMER_KEY);
+      sessionStorage.removeItem(PLAY_LIMIT_UI_KEY);
     } catch (_) {}
 
     if (sessionTickId != null) {
@@ -140,13 +123,13 @@ function createTimedSession(options) {
       sessionTickId = null;
     }
 
-    loadStatsFromStorage();
     stopGame();
     document.body.classList.add('session-ended');
 
     if (timerEl) {
       timerEl.classList.remove('is-visible');
       timerEl.textContent = '';
+      lastTimerText = '';
     }
     if (overlayEl) overlayEl.setAttribute('aria-hidden', 'false');
     if (boardEl) {
@@ -158,8 +141,11 @@ function createTimedSession(options) {
   function updatePlayTimerUi() {
     if (!timerEl) return;
     if (!playLimitEndsAt || sessionEnded) {
-      timerEl.classList.remove('is-visible');
-      timerEl.textContent = '';
+      if (lastTimerText !== '') {
+        timerEl.classList.remove('is-visible');
+        timerEl.textContent = '';
+        lastTimerText = '';
+      }
       return;
     }
 
@@ -169,14 +155,17 @@ function createTimedSession(options) {
       return;
     }
 
-    timerEl.classList.add('is-visible');
-    timerEl.textContent = formatTimeLeft(left) + ' left';
+    const next = formatTimeLeft(left) + ' left';
+    if (next === lastTimerText) return;
+    if (lastTimerText === '') timerEl.classList.add('is-visible');
+    timerEl.textContent = next;
+    lastTimerText = next;
   }
 
   function startSessionTimerIfNeeded() {
     if (!playLimitEndsAt || sessionEnded) return;
     updatePlayTimerUi();
-    sessionTickId = setInterval(updatePlayTimerUi, 500);
+    sessionTickId = setInterval(updatePlayTimerUi, 1000);
   }
 
   return {
@@ -186,15 +175,7 @@ function createTimedSession(options) {
       return sessionEnded;
     },
     mutateStats,
-    persistStats,
     shouldTrackStats,
-    startSessionTimerIfNeeded,
-    updatePlayTimerUi,
-    get stats() {
-      return stats;
-    },
-    set stats(value) {
-      stats = value;
-    }
+    startSessionTimerIfNeeded
   };
 }

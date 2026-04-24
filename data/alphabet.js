@@ -1,16 +1,3 @@
-const ALPHABET_COLORS = [
-  '#e53935',
-  '#ff6d00',
-  '#ffab00',
-  '#43a047',
-  '#1e88e5',
-  '#8e24aa',
-  '#d81b60',
-  '#00897b',
-  '#3949ab',
-  '#f4511e'
-];
-
 const NUMBER_WORDS = {
   '0': 'zero',
   '1': 'one',

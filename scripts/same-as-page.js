@@ -184,7 +184,7 @@ function onChoiceTap(isLeft) {
   session.mutateStats(function(stats) {
     stats.matchWrong++;
     const struggleId = struggleIdForIndex(targetIndex);
-    if (struggleId && !stats.struggled.includes(struggleId)) stats.struggled.push(struggleId);
+    if (struggleId) pushUniqueStruggle(stats.struggled, struggleId);
   });
   thumbsDown.show();
   audio.playBuzzer();

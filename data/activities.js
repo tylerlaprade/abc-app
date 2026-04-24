@@ -1,6 +1,3 @@
-const PORTAL_TIMER_KEY = 'ariaPortalPlayTimer';
-const PLAY_LIMIT_UI_KEY = 'ariaPortalPlayLimitUi';
-
 const ACTIVITIES = [
   {
     id: 'alphabets',

@@ -1,15 +1,34 @@
+let cachedVoice = null;
+let cachedVoiceSignature = '';
+
 function pickEnglishVoice() {
   try {
-    const voices = window.speechSynthesis.getVoices();
+    const synth = window.speechSynthesis;
+    if (!synth) return null;
+    const voices = synth.getVoices();
     if (!voices || !voices.length) return null;
+    const signature = voices.length + ':' + voices[0].voiceURI;
+    if (cachedVoice && signature === cachedVoiceSignature) return cachedVoice;
+    let picked = null;
     for (const voice of voices) {
-      if ((voice.lang || '').indexOf('en') === 0) return voice;
+      if ((voice.lang || '').indexOf('en') === 0) { picked = voice; break; }
     }
-    return voices[0];
+    cachedVoice = picked || voices[0];
+    cachedVoiceSignature = signature;
+    return cachedVoice;
   } catch (_) {
     return null;
   }
 }
+
+try {
+  if (window.speechSynthesis) {
+    window.speechSynthesis.addEventListener('voiceschanged', function() {
+      cachedVoice = null;
+      cachedVoiceSignature = '';
+    });
+  }
+} catch (_) {}
 
 function speakText(text, options = {}) {
   const { rate = 0.9 } = options;

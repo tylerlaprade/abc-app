@@ -37,6 +37,10 @@ function normalizeModeStats(parsed, freeField, legacyFreeFields = []) {
   };
 }
 
+function pushUniqueStruggle(arr, key) {
+  if (!arr.includes(key)) arr.push(key);
+}
+
 function createSameAsStats() {
   return {
     matchCorrect: 0,

@@ -28,19 +28,6 @@ const ANIMAL_VIDEO_CUES = [
   [52.5, 55.85]
 ];
 
-const ANIMAL_CONFETTI_COLORS = [
-  '#e53935',
-  '#ff6d00',
-  '#ffab00',
-  '#43a047',
-  '#1e88e5',
-  '#8e24aa',
-  '#d81b60',
-  '#00897b',
-  '#3949ab',
-  '#f4511e'
-];
-
 function animalEmojiForKey(key) {
   const animal = ANIMALS.find(function(item) { return item.key === key; });
   return animal ? animal.emoji : '?';
