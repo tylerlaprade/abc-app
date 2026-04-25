@@ -23,7 +23,6 @@
 
   body.chase-active {
     overflow: hidden;
-    touch-action: none;
   }
 
   body.session-ended {
